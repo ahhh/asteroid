@@ -892,7 +892,11 @@ function drawWeb(){
     } else if(avail){
       wctx.fillStyle='#000';wctx.font='bold 11px system-ui';wctx.textAlign='center';wctx.fillText(n.cost,n.x,n.y+4);
     }
-    wctx.fillStyle=n.type==='ultimate'?'#ee29ff':'#f0eaff'; wctx.font='bold 12px system-ui'; wctx.textAlign='center'; wctx.fillText(n.name,n.x,n.y-18);
+    wctx.fillStyle=n.type==='ultimate'?'#ee29ff':'#f0eaff'; wctx.font='bold 12px system-ui'; wctx.textAlign='center';
+    // Near-horizontal spokes pack many long names along one row; stagger their labels
+    // above/below (alternating by ring) so adjacent names sit in different bands and stay legible.
+    const labelBelow=Math.abs(n.y)<40 && (n.ring%2===1);
+    wctx.fillText(n.name,n.x,n.y+(labelBelow?23:-18));
   }
   wctx.restore();
 }
