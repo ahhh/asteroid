@@ -191,12 +191,20 @@ function angTo(a,b){return Math.atan2(b.y-a.y,b.x-a.x)}
 function toast(t){const el=document.getElementById('toast'); el.textContent=t; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),1700)}
 
 const player={
-  x:0,y:0,vx:0,vy:0,a:-Math.PI/2,r:14,hp:100,shield:40,fire:0,boost:0,pulseCd:0,xp:0,level:1,ap:0,
+  x:0,y:0,vx:0,vy:0,a:-Math.PI/2,r:14,hp:100,shield:40,shieldOuter:0,fire:0,missileCd:0,boost:0,pulseCd:0,xp:0,level:1,ap:0,
   unlocked:new Map([['core',1]]),
   glowTime:0
 };
 
 function nodeLevel(id){ return player.unlocked.get(id)||0; }
+
+// Ablative Plates — hardened plates orbiting the hull that intercept enemy fire
+function platePositions(){
+  const lv=nodeLevel('armor1'); if(!lv) return [];
+  const n=lv+1, rad=player.r+15, res=[];
+  for(let i=0;i<n;i++){ const ang=time*1.7 + i/n*TAU; res.push({x:player.x+Math.cos(ang)*rad, y:player.y+Math.sin(ang)*rad, r:7, ang}); }
+  return res;
+}
 
 const baseStats={
   maxHp:100, shieldCap:40, shieldRegen:5, thrust:210, turn:4.2, drag:.992, maxSpeed:430,
@@ -220,35 +228,35 @@ const nodes=[
   // SHIELD spoke
   {id:'shield1',x:0,y:0,name:'Shield Emitters I',type:'shield',cost:1,maxLevel:3,mods:{shieldCap:35,shieldRegen:2},desc:'+35 shield capacity and regeneration per level.'},
   {id:'shield2',x:0,y:0,name:'Phase Capacitors',type:'shield',cost:1,maxLevel:3,mods:{shieldCap:55,shieldRegen:4},desc:'Stronger shields per level.'},
-  {id:'shield3',x:0,y:0,name:'Layered Bubble',type:'shield',cost:1,maxLevel:3,mods:{shieldCap:85,shieldRegen:5},desc:'Large shield capacity upgrade per level.'},
+  {id:'shield3',x:0,y:0,name:'Layered Bubble',type:'shield',cost:1,maxLevel:3,mods:{shieldCap:85,shieldRegen:5},desc:'Splits your shield into two independent layers: a fast-recharging outer bubble and a deep inner core. +85 capacity per level.'},
   {id:'pulse',x:0,y:0,name:'Repulsor Pulse',type:'shield',cost:1,maxLevel:4,mods:{pulse:true,shieldCap:30},desc:'Press E to push enemies away. Higher levels = wider range and more damage.'},
 
   // HULL spoke
   {id:'hull1',x:0,y:0,name:'Expanded Hull I',type:'hull',cost:1,maxLevel:3,mods:{maxHp:35},desc:'+35 max hull per level.'},
   {id:'hull2',x:0,y:0,name:'Trussed Frame',type:'hull',cost:1,maxLevel:3,mods:{maxHp:55,drag:.001},desc:'+55 max hull and slightly better inertial stability per level.'},
-  {id:'armor1',x:0,y:0,name:'Ablative Plates',type:'hull',cost:1,maxLevel:3,mods:{maxHp:70},desc:'+70 max hull per level.'},
+  {id:'armor1',x:0,y:0,name:'Ablative Plates',type:'hull',cost:1,maxLevel:3,mods:{maxHp:45},desc:'Hardened plates orbit your hull, soaking up incoming enemy fire. One more plate per level, plus +45 max hull.'},
   {id:'ram',x:0,y:0,name:'Impact Keel',type:'hull',cost:1,maxLevel:3,mods:{maxHp:90},desc:'Massive hull boost per level.'},
 
   // ENGINE spoke
   {id:'engine1',x:0,y:0,name:'Vector Thrusters',type:'engine',cost:1,maxLevel:3,mods:{thrust:45,maxSpeed:35},desc:'More acceleration and top speed per level.'},
   {id:'engine2',x:0,y:0,name:'Afterburn Chamber',type:'engine',cost:1,maxLevel:3,mods:{boost:.55,maxSpeed:45},desc:'Stronger Shift boost and higher top speed per level.'},
-  {id:'engine3',x:0,y:0,name:'Inertial Weave',type:'engine',cost:1,maxLevel:3,mods:{turn:.8,drag:.002,maxSpeed:50},desc:'Better turning, control, and speed per level.'},
+  {id:'engine3',x:0,y:0,name:'Inertial Weave',type:'engine',cost:1,maxLevel:3,mods:{turn:.8,drag:.002,maxSpeed:50},desc:'Better turning, control and speed. Also weaves a temporal drag field that slows nearby objects and enemy fire — wider per level.'},
   {id:'engine4',x:0,y:0,name:'Warp Lattice',type:'engine',cost:1,maxLevel:3,mods:{thrust:60,maxSpeed:70,boost:.5},desc:'Capstone drive: huge thrust, top speed and boost per level.'},
 
   // SENSOR spoke
   {id:'sensor1',x:0,y:0,name:'Sensor Mast',type:'sensor',cost:1,maxLevel:3,mods:{pickup:55,absorb:9,radar:.25},desc:'Pickups magnetize from farther away and are absorbed at a wider range per level.'},
   {id:'sensor2',x:0,y:0,name:'Threat Suite',type:'sensor',cost:1,maxLevel:3,mods:{pickup:70,absorb:12,radar:.35,crit:.03},desc:'Better sensors increase pickup range, absorb range and crit chance per level.'},
-  {id:'sensor3',x:0,y:0,name:'Predictive Targeting',type:'sensor',cost:1,maxLevel:3,mods:{crit:.09,damage:7},desc:'Sensor-driven fire control per level.'},
-  {id:'sensor4',x:0,y:0,name:'Omniscient Array',type:'sensor',cost:1,maxLevel:3,mods:{crit:.1,radar:.5,pickup:60,absorb:12},desc:'Capstone sensors: sharp crit, long radar and wide salvage reach per level.'},
+  {id:'sensor3',x:0,y:0,name:'Predictive Targeting',type:'sensor',cost:1,maxLevel:3,mods:{crit:.09,damage:7},desc:'Sensor-driven fire control: your shots home onto the nearest target, tracking harder per level.'},
+  {id:'sensor4',x:0,y:0,name:'Omniscient Array',type:'sensor',cost:1,maxLevel:3,mods:{crit:.1,radar:.5,pickup:60,absorb:12,bulletLife:.32},desc:'Capstone sensors: sharp crit, long radar, wide salvage reach and far-flying rounds per level.'},
 
   // WEAPON spoke
   {id:'mount1',x:0,y:0,name:'Weapon Mounts I',type:'weapon',cost:1,maxLevel:3,mods:{mounts:1,spread:.07},desc:'Adds paired side cannons per level.'},
   {id:'gun1',x:0,y:0,name:'Tuned Accelerators',type:'weapon',cost:1,maxLevel:3,mods:{damage:8,bulletSpeed:90},desc:'+damage and faster rounds per level.'},
-  {id:'gun2',x:0,y:0,name:'Mag-Rail Lances',type:'weapon',cost:1,maxLevel:3,mods:{damage:14,bulletSpeed:120,pierce:1},desc:'High damage rounds, pierce one small target per level.'},
+  {id:'gun2',x:0,y:0,name:'Missile Battery',type:'weapon',cost:1,maxLevel:3,mods:{damage:8},desc:'Mounts a missile launcher that lobs slow, seeking warheads detonating in a wide blast on impact. Bigger blast and faster reloads per level.'},
   {id:'storm',x:0,y:0,name:'Broadside Storm',type:'weapon',cost:1,maxLevel:3,mods:{mounts:2,damage:10},desc:'Advanced weapon lattice: many guns per level.'},
 
   // Hybrids — one per gap between neighbouring sectors (ring 3)
-  {id:'assault',x:0,y:0,name:'Assault Doctrine',type:'hybrid',cost:1,maxLevel:2,mods:{damage:12,shieldRegen:3,repair:1.5},desc:'Crew + shield fusion. Aggressive repair and shield cycle.'},
+  {id:'assault',x:0,y:0,name:'Assault Doctrine',type:'hybrid',cost:1,maxLevel:2,mods:{damage:12,shieldRegen:3,repair:1.5},desc:'Crew + shield fusion. Overcharges your shields red-hot — while raised they scorch and shove anything that touches them and burn away incoming fire.'},
   {id:'hybrid2',x:0,y:0,name:'Citadel Doctrine',type:'hybrid',cost:1,maxLevel:2,mods:{maxHp:110,shieldCap:75,shieldRegen:4},desc:'Shield + hull hybrid. Become a fortress.'},
   {id:'vanguard',x:0,y:0,name:'Vanguard Hull',type:'hybrid',cost:1,maxLevel:2,mods:{maxHp:60,thrust:35,drag:.001},desc:'Hull + engine fusion. Reinforced frame that doesn\'t sacrifice thrust.'},
   {id:'hybrid4',x:0,y:0,name:'Interceptor Frame',type:'hybrid',cost:1,maxLevel:2,mods:{thrust:55,maxSpeed:45,turn:.6,crit:.07,radar:.3},desc:'Engine + sensor fusion. A nimble interceptor that reads the field and outruns it.'},
@@ -320,8 +328,17 @@ function recomputeStats(){
       stats[k]=(typeof stats[k]==='boolean')?Boolean(v):(stats[k]+v*level);
     }
   }
+  // Layered Bubble splits the shield into two independently-recharging layers
+  stats.dualShield=nodeLevel('shield3')>0;
+  if(stats.dualShield){
+    stats.shieldCapOuter=stats.shieldCap*0.45;
+    stats.shieldCapInner=stats.shieldCap*0.55;
+    stats.shieldRegenOuter=stats.shieldRegen*1.7; // outer bubble snaps back fast
+    stats.shieldRegenInner=stats.shieldRegen*0.7; // inner core is slow but deep
+  }
   player.hp=clamp(player.hp + (stats.maxHp-oldMax), 0, stats.maxHp);
-  player.shield=clamp(player.shield + (stats.shieldCap-oldShield), 0, stats.shieldCap);
+  player.shield=clamp(player.shield + (stats.shieldCap-oldShield), 0, stats.dualShield?stats.shieldCapInner:stats.shieldCap);
+  player.shieldOuter=clamp(player.shieldOuter||0, 0, stats.dualShield?stats.shieldCapOuter:0);
 }
 function canUnlock(n){
   if(!n) return false;
@@ -350,7 +367,7 @@ function unlock(id){
 }
 
 function resetWorld(){
-  player.x=W/2; player.y=H/2; player.vx=0; player.vy=0; player.a=-Math.PI/2; player.hp=stats.maxHp; player.shield=stats.shieldCap;
+  player.x=W/2; player.y=H/2; player.vx=0; player.vy=0; player.a=-Math.PI/2; player.hp=stats.maxHp; player.shield=stats.dualShield?stats.shieldCapInner:stats.shieldCap; player.shieldOuter=stats.dualShield?stats.shieldCapOuter:0; player.missileCd=0; player.pulseCd=0;
   bullets=[]; enemyBullets=[]; asteroids=[]; enemies=[]; particles=[]; pickups=[];
   levelUpEffects=[]; screenFlash=0; player.glowTime=0;
   score=0; time=0; wave=1;
@@ -411,6 +428,7 @@ function gainXP(x){
 }
 function damagePlayer(d){
   if(over) return;
+  if(stats.dualShield && player.shieldOuter>0){ let so=Math.min(player.shieldOuter,d); player.shieldOuter-=so; d-=so; }
   let s=Math.min(player.shield,d); player.shield-=s; d-=s;
   player.hp-=d; shake=Math.max(shake,d*.25); beep(90,.04,'sawtooth');
   if(player.hp<=0){
@@ -479,17 +497,26 @@ function beep(freq=.01,dur=.03,type='square'){
 function fire(){
   if(player.fire>0) return;
   player.fire=1/stats.fireRate;
+  const sLv=nodeLevel('sensor3'); const homing=sLv>0?4.2+sLv*1.6:0; // Predictive Targeting → homing shots
   const m=Math.min(8,Math.max(1,Math.floor(stats.mounts)));
   const offsets=Array.from({length:m},(_,i)=>m===1?0:(i-(m-1)/2)*(0.28/Math.max(1,m-1)));
   for(const off of offsets){
     const a=player.a+off+rand(-stats.spread,stats.spread);
-    bullets.push({x:player.x+Math.cos(a)*17,y:player.y+Math.sin(a)*17,vx:player.vx+Math.cos(a)*stats.bulletSpeed,vy:player.vy+Math.sin(a)*stats.bulletSpeed,r:3,life:stats.bulletLife,damage:stats.damage*(Math.random()<stats.crit?2.2:1),pierce:stats.pierce});
+    bullets.push({x:player.x+Math.cos(a)*17,y:player.y+Math.sin(a)*17,vx:player.vx+Math.cos(a)*stats.bulletSpeed,vy:player.vy+Math.sin(a)*stats.bulletSpeed,r:3,life:stats.bulletLife,damage:stats.damage*(Math.random()<stats.crit?2.2:1),pierce:stats.pierce,homing});
   }
   for(let i=0;i<stats.drones;i++){
     const da=player.a+(i?-.18:.18); const sx=player.x+Math.cos(player.a+Math.PI/2*(i?1:-1))*28, sy=player.y+Math.sin(player.a+Math.PI/2*(i?1:-1))*28;
-    bullets.push({x:sx,y:sy,vx:player.vx+Math.cos(da)*stats.bulletSpeed*.85,vy:player.vy+Math.sin(da)*stats.bulletSpeed*.85,r:2.5,life:.8,damage:stats.damage*.55,pierce:0});
+    bullets.push({x:sx,y:sy,vx:player.vx+Math.cos(da)*stats.bulletSpeed*.85,vy:player.vy+Math.sin(da)*stats.bulletSpeed*.85,r:2.5,life:.8,damage:stats.damage*.55,pierce:0,homing:homing*.8});
   }
   beep(240,.025,'square');
+}
+// Missile Battery — slow-firing rounds that detonate in an area on impact
+function fireMissiles(){
+  const lv=nodeLevel('gun2'); if(!lv||player.missileCd>0) return;
+  player.missileCd=1.5-lv*0.18; // much slower cadence than the main guns
+  const a=player.a, sp=stats.bulletSpeed*0.62;
+  bullets.push({x:player.x+Math.cos(a)*18,y:player.y+Math.sin(a)*18,vx:player.vx+Math.cos(a)*sp,vy:player.vy+Math.sin(a)*sp,r:5,life:2.4,damage:stats.damage*(1.1+lv*0.5),pierce:0,homing:3.4+lv*0.7,missile:true,aoe:60+lv*22});
+  beep(150,.07,'triangle');
 }
 function pulse(){
   const pLv=nodeLevel('pulse');
@@ -517,9 +544,15 @@ function update(dt){
   const sp=Math.hypot(player.vx,player.vy); if(sp>stats.maxSpeed){player.vx=player.vx/sp*stats.maxSpeed;player.vy=player.vy/sp*stats.maxSpeed}
   player.vx*=Math.pow(stats.drag,dt*60); player.vy*=Math.pow(stats.drag,dt*60);
   player.x+=player.vx*dt; player.y+=player.vy*dt; wrap(player);
-  if(keys.has('Space')) fire();
-  player.fire=Math.max(0,player.fire-dt); player.pulseCd=Math.max(0,player.pulseCd-dt);
-  player.shield=clamp(player.shield+stats.shieldRegen*dt,0,stats.shieldCap);
+  if(keys.has('Space')){ fire(); fireMissiles(); }
+  player.fire=Math.max(0,player.fire-dt); player.pulseCd=Math.max(0,player.pulseCd-dt); player.missileCd=Math.max(0,player.missileCd-dt);
+  if(stats.dualShield){
+    player.shieldOuter=clamp(player.shieldOuter+stats.shieldRegenOuter*dt,0,stats.shieldCapOuter);
+    player.shield=clamp(player.shield+stats.shieldRegenInner*dt,0,stats.shieldCapInner);
+  } else {
+    player.shieldOuter=0;
+    player.shield=clamp(player.shield+stats.shieldRegen*dt,0,stats.shieldCap);
+  }
   player.hp=clamp(player.hp+stats.repair*dt,0,stats.maxHp);
 
   // Level-up effects update
@@ -536,9 +569,29 @@ function update(dt){
     if(wave>df.extraWave && Math.random()<df.extraChance) spawnEnemy();
   }
 
-  for(const b of bullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;wrap(b)}
+  for(const b of bullets){
+    if(b.homing){ // Predictive Targeting / missiles — steer toward the nearest target
+      let best=null,bd=1e9;
+      for(const e of enemies){ if(e.spawn>0)continue; const dd=dist2(b,e); if(dd<bd){bd=dd;best=e;} }
+      for(const a of asteroids){ const dd=dist2(b,a); if(dd<bd){bd=dd;best=a;} }
+      if(best && bd<540*540){
+        const sp2=Math.hypot(b.vx,b.vy)||1;
+        let cur=Math.atan2(b.vy,b.vx);
+        const want=Math.atan2(best.y-b.y,best.x-b.x);
+        let diff=((want-cur+Math.PI*3)%(Math.PI*2))-Math.PI;
+        cur+=clamp(diff,-b.homing*dt,b.homing*dt);
+        b.vx=Math.cos(cur)*sp2; b.vy=Math.sin(cur)*sp2;
+      }
+    }
+    b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;wrap(b);
+  }
   bullets=bullets.filter(b=>b.life>0);
-  for(const b of enemyBullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;wrap(b); if(dist2(b,player)<(b.r+player.r)**2){b.life=0;damagePlayer(b.damage)}}
+  const plates=platePositions();
+  for(const b of enemyBullets){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;wrap(b);
+    let absorbed=false;
+    for(const pl of plates){ if(dist2(b,pl)<(b.r+pl.r)**2){ b.life=0; absorbed=true; explode(pl.x,pl.y,5,'#cfe3ff'); beep(300,.02,'square'); break; } }
+    if(!absorbed && dist2(b,player)<(b.r+player.r)**2){b.life=0;damagePlayer(b.damage)}
+  }
   enemyBullets=enemyBullets.filter(b=>b.life>0);
 
   for(const a of asteroids){a.x+=a.vx*dt;a.y+=a.vy*dt;a.rot+=a.rv*dt;wrap(a);
@@ -566,10 +619,44 @@ function update(dt){
     if(dist2(e,player)<(e.r+player.r)**2){damagePlayer(18); e.hp-=25; const an2=angTo(e,player); player.vx+=Math.cos(an2)*220;player.vy+=Math.sin(an2)*220}
   }
 
+  // Inertial Weave — temporal drag field slows nearby objects and enemy projectiles
+  const weaveLv=nodeLevel('engine3');
+  if(weaveLv){
+    const wR=240+weaveLv*70;
+    for(const o of asteroids){ const dx=o.x-player.x,dy=o.y-player.y,dd=Math.hypot(dx,dy); if(dd<wR){ const k=Math.pow(1-Math.min(0.9,(1-dd/wR)*(0.45+weaveLv*0.12)),dt); o.vx*=k; o.vy*=k; } }
+    for(const o of enemies){ const dx=o.x-player.x,dy=o.y-player.y,dd=Math.hypot(dx,dy); if(dd<wR){ const k=Math.pow(1-Math.min(0.9,(1-dd/wR)*(0.45+weaveLv*0.12)),dt); o.vx*=k; o.vy*=k; } }
+    for(const o of enemyBullets){ const dx=o.x-player.x,dy=o.y-player.y,dd=Math.hypot(dx,dy); if(dd<wR){ const k=Math.pow(1-Math.min(0.9,(1-dd/wR)*(0.45+weaveLv*0.12)),dt); o.vx*=k; o.vy*=k; } }
+  }
+
+  // Assault Doctrine — overcharged red shields scorch and shove anything they touch
+  const assaultLv=nodeLevel('assault');
+  if(assaultLv && (player.shield+player.shieldOuter)>1){
+    const sf=clamp((stats.shieldCap-baseStats.shieldCap)/320,0,1);
+    const auraR=16+sf*8+(stats.dualShield?7:3);
+    const aDmg=(45+assaultLv*40)*dt;
+    for(const a of asteroids){ const dx=a.x-player.x,dy=a.y-player.y,dd=Math.hypot(dx,dy)||1; if(dd<auraR+a.r){ a.hp-=aDmg; a.vx+=dx/dd*140*dt; a.vy+=dy/dd*140*dt; if(Math.random()<0.25)explode(player.x+dx/dd*auraR,player.y+dy/dd*auraR,1,'#ff5a5a'); } }
+    for(const e of enemies){ const dx=e.x-player.x,dy=e.y-player.y,dd=Math.hypot(dx,dy)||1; if(dd<auraR+e.r){ e.hp-=aDmg; e.vx+=dx/dd*40; e.vy+=dy/dd*40; if(Math.random()<0.25)explode(player.x+dx/dd*auraR,player.y+dy/dd*auraR,1,'#ff5a5a'); } }
+    for(const b of enemyBullets){ const dx=b.x-player.x,dy=b.y-player.y; if(dx*dx+dy*dy<(auraR+b.r)**2){ b.life=0; explode(b.x,b.y,4,'#ff5a5a'); } }
+  }
+
   // bullet collisions
   for(const b of bullets){
-    for(const a of asteroids){ if(b.life>0 && dist2(b,a)<(b.r+a.r)**2){ a.hp-=b.damage; if(b.pierce>0)b.pierce--; else b.life=0; explode(b.x,b.y,4,'#f7e43f'); break; } }
-    for(const e of enemies){ if(b.life>0 && dist2(b,e)<(b.r+e.r)**2){ e.hp-=b.damage; if(b.pierce>0)b.pierce--; else b.life=0; explode(b.x,b.y,6,'#ff344f'); break; } }
+    if(b.life<=0) continue;
+    let hit=null;
+    for(const a of asteroids){ if(dist2(b,a)<(b.r+a.r)**2){ hit=a; break; } }
+    if(!hit) for(const e of enemies){ if(dist2(b,e)<(b.r+e.r)**2){ hit=e; break; } }
+    if(!hit) continue;
+    if(b.missile){ // warhead detonates in an area
+      explode(b.x,b.y,30,'#ffd36b'); shake=Math.max(shake,5); beep(70,.08,'sawtooth');
+      for(const a of asteroids){ if(dist2(b,a)<(b.aoe+a.r)**2) a.hp-=b.damage; }
+      for(const e of enemies){ if(dist2(b,e)<(b.aoe+e.r)**2) e.hp-=b.damage; }
+      b.life=0;
+    } else {
+      const isEnemy=hit.type!==undefined;
+      hit.hp-=b.damage;
+      if(b.pierce>0)b.pierce--; else b.life=0;
+      explode(b.x,b.y,isEnemy?6:4,isEnemy?'#ff344f':'#f7e43f');
+    }
   }
   for(let i=asteroids.length-1;i>=0;i--){ const a=asteroids[i]; if(a.hp<=0){ asteroids.splice(i,1); score+=Math.floor(a.r); gainXP(6+a.r*.16); drop(a.x,a.y,7+a.r*.12); explode(a.x,a.y,16,'#c9c2ff'); if(a.r>28){ for(let k=0;k<2;k++) spawnAsteroid(a.x+rand(-8,8),a.y+rand(-8,8),a.r*.52,false); } } }
   for(let i=enemies.length-1;i>=0;i--){ const e=enemies[i]; if(e.hp<=0){ enemies.splice(i,1); const val={scout:22,hunter:34,gunship:55,sniper:48,carrier:105,centipede:38}[e.type]; score+=val; gainXP(val*.55); drop(e.x,e.y,val*.55); explode(e.x,e.y,32,e.type==='carrier'?'#ee29ff':e.type==='centipede'?'#ffb13f':'#ff344f'); beep(80,.05,'triangle');
@@ -635,12 +722,36 @@ function drawShip(c,x,y,a,scale=1){
     c.lineCap='butt';
   }
 
-  // Hull — line weight thickens and color warms as the hull is reinforced
+  // Hull — its silhouette gains edges as hull nodes are unlocked; weight/colour warm with armour
+  const hl1=nodeLevel('hull1')>0, hl2=nodeLevel('hull2')>0, abl=nodeLevel('armor1')>0, keel=nodeLevel('ram')>0;
+  // top-half profile, nose→rear (first & last points sit on the centre axis and are mirrored below)
+  const top=[[keel?27:18,0]];
+  if(keel) top.push([15,-2.5]);   // Impact Keel — stepped ram prow
+  if(hl2)  top.push([10,-4.5]);   // Trussed Frame — forward truss edge
+  if(abl)  top.push([3,-7.5]);    // Ablative Plates — beveled plate edge
+  if(hl1)  top.push([-4,-9.5]);   // Expanded Hull — widened midbody shoulder
+  top.push([-13,-10-(hl1?2.5:0)-(abl?1.5:0)]); // wing tip (rear-top corner), wider with armour
+  top.push([-8,0]);               // rear notch
   const hr=Math.round(120+hullF*120), hg=Math.round(230-hullF*30), hb=255;
   c.strokeStyle=hasUltima?'#ffd6ff':`rgb(${hr},${hg},${hb})`;
-  c.lineWidth=2+hullF*2.2;
-  c.beginPath(); c.moveTo(18,0); c.lineTo(-13,-10); c.lineTo(-8,0); c.lineTo(-13,10); c.closePath(); c.stroke();
+  c.lineWidth=2+hullF*2.2; c.lineJoin='round';
+  c.beginPath(); c.moveTo(top[0][0],top[0][1]);
+  for(let i=1;i<top.length;i++) c.lineTo(top[i][0],top[i][1]);
+  for(let i=top.length-2;i>=1;i--) c.lineTo(top[i][0],-top[i][1]);
+  c.closePath(); c.stroke();
   c.shadowBlur=0;
+
+  // Doctrine / Rig / Frame fusions — each bolts distinct angular edges onto the frame
+  const accent=(col,w,pts)=>{ c.strokeStyle=col; c.lineWidth=w;
+    c.beginPath(); c.moveTo(pts[0][0],pts[0][1]); for(let i=1;i<pts.length;i++)c.lineTo(pts[i][0],pts[i][1]); c.stroke();
+    c.beginPath(); c.moveTo(pts[0][0],-pts[0][1]); for(let i=1;i<pts.length;i++)c.lineTo(pts[i][0],-pts[i][1]); c.stroke(); };
+  if(nodeLevel('assault'))  accent('#ff5a5a',1.8,[[-9,-8],[-19,-13],[-9,-5]]);        // aggressive swept barbs
+  if(nodeLevel('vanguard')) accent('#cfe7ff',1.8,[[1,-9],[-6,-13],[-12,-12]]);        // reinforced shoulder plates
+  if(nodeLevel('hybrid2'))  accent('#9fd0ff',1.6,[[-12,-6],[-17,-6],[-17,-1.5],[-12,-1.5]]); // citadel rear brackets
+  if(nodeLevel('hybrid4'))  accent('#8ae9ff',1.5,[[-8,-8],[-23,-11]]);                // interceptor swept fins
+  if(nodeLevel('hybrid1'))  accent('#ffd36b',1.5,[[-2,-7],[-2,-15],[3,-11]]);         // siege dorsal sensor mast
+  if(nodeLevel('hybrid3'))  accent('#ffb13f',1.6,[[-4,-9],[-7,-15],[-11,-12]]);       // privateer side hardpoints
+  c.lineJoin='miter';
 
   // Armor plating — interior bracing lines appear with heavier hulls
   if(hullF>0.25){
@@ -648,6 +759,19 @@ function drawShip(c,x,y,a,scale=1){
     c.beginPath(); c.moveTo(9,0); c.lineTo(-9,-6); c.moveTo(9,0); c.lineTo(-9,6); c.stroke();
   }
   if(hullF>0.6){ c.beginPath(); c.moveTo(2,-5); c.lineTo(2,5); c.stroke(); }
+
+  // Ablative Plates — hardened plates orbiting the hull (drawn in ship-local space)
+  const plateLv=nodeLevel('armor1');
+  if(plateLv){
+    const n=plateLv+1, rad=player.r+15;
+    for(let i=0;i<n;i++){
+      const ang=time*1.7 + i/n*TAU - a; // counter-rotate by ship heading so plates orbit in world space
+      c.save(); c.rotate(ang); c.translate(rad,0); c.rotate(Math.PI/2);
+      c.strokeStyle='#cfe3ff'; c.fillStyle='rgba(120,170,220,0.35)'; c.lineWidth=2;
+      c.beginPath(); c.moveTo(-5,-2); c.lineTo(5,-2); c.lineTo(6,2); c.lineTo(-6,2); c.closePath(); c.fill(); c.stroke();
+      c.restore();
+    }
+  }
 
   // Sensor antenna — extends with radar/sensor upgrades
   if(stats.radar>1.05){
@@ -671,12 +795,27 @@ function drawShip(c,x,y,a,scale=1){
     c.fillStyle=cg; c.beginPath(); c.arc(0,0,13,0,TAU); c.fill();
   }
 
-  // Shield bubble — radius, thickness and brightness scale with shield capacity
+  // Shield bubble(s) — Layered Bubble splits into two layers; Assault Doctrine turns them red-hot
+  const assaultOn=nodeLevel('assault')>0;
+  const col=assaultOn?'255,90,90':'138,233,255';
   const sr=16+shieldF*8;
-  const sa=Math.round((0.30+shieldF*0.5)*255).toString(16).padStart(2,'0');
-  c.strokeStyle='#8ae9ff'+sa; c.lineWidth=1.5+shieldF*1.5;
-  c.beginPath(); c.arc(0,0,sr,0,TAU); c.stroke();
-  if(shieldF>0.5){ c.strokeStyle='#bff6ff55'; c.lineWidth=1; c.beginPath(); c.arc(0,0,sr+4,0,TAU); c.stroke(); }
+  const innerCap=stats.dualShield?stats.shieldCapInner:stats.shieldCap;
+  const innerF=clamp(player.shield/(innerCap||1),0,1);
+  c.lineWidth=1.5+shieldF*1.5;
+  c.strokeStyle=`rgba(${col},${0.25+innerF*0.55})`;
+  c.beginPath(); c.arc(0,0,stats.dualShield?sr-4:sr,0,TAU); c.stroke();
+  if(stats.dualShield){ // independent fast-recharging outer layer
+    const outerF=clamp(player.shieldOuter/(stats.shieldCapOuter||1),0,1);
+    c.lineWidth=1.4+shieldF*1.2;
+    c.strokeStyle=`rgba(${col},${0.2+outerF*0.5})`;
+    c.beginPath(); c.arc(0,0,sr+4,0,TAU); c.stroke();
+  } else if(shieldF>0.5){
+    c.strokeStyle=`rgba(${col},0.33)`; c.lineWidth=1; c.beginPath(); c.arc(0,0,sr+4,0,TAU); c.stroke();
+  }
+  if(assaultOn && (player.shield+player.shieldOuter)>1){ // scorching impact halo
+    c.strokeStyle=`rgba(255,60,60,${0.16+0.1*Math.sin(time*8)})`; c.lineWidth=3;
+    c.beginPath(); c.arc(0,0,sr+(stats.dualShield?7:3),0,TAU); c.stroke();
+  }
 
   c.restore();
 
@@ -756,8 +895,14 @@ function render(){
     ctx.stroke(); ctx.restore();
     ctx.fillStyle='#0008';ctx.fillRect(e.x-16,e.y-e.r-12,32,4);ctx.fillStyle='#ff344f';ctx.fillRect(e.x-16,e.y-e.r-12,32*clamp(e.hp/e.maxHp,0,1),4);
   }
-  ctx.fillStyle='#f7e43f'; for(const b of bullets){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fill()}
+  for(const b of bullets){
+    if(b.missile){ ctx.fillStyle='#ffd36b'; ctx.shadowColor='#ff8a3f'; ctx.shadowBlur=8; ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fill(); ctx.shadowBlur=0; }
+    else { ctx.fillStyle=b.homing?'#7be0ff':'#f7e43f'; ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fill(); }
+  }
   ctx.fillStyle='#ff344f'; for(const b of enemyBullets){ctx.beginPath();ctx.arc(b.x,b.y,b.r,0,TAU);ctx.fill()}
+  // Inertial Weave drag field
+  const wLv=nodeLevel('engine3');
+  if(wLv){ const wR=240+wLv*70; ctx.save(); ctx.setLineDash([3,9]); ctx.strokeStyle='rgba(138,233,255,0.13)'; ctx.lineWidth=1; ctx.beginPath(); ctx.arc(player.x,player.y,wR,0,TAU); ctx.stroke(); ctx.restore(); }
   drawShip(ctx,player.x,player.y,player.a);
   if(stats.absorb>baseStats.absorb){ // salvage absorb radius — grows with sensor/salvage upgrades
     ctx.save(); ctx.setLineDash([4,6]); ctx.strokeStyle='#1fda6733'; ctx.lineWidth=1;
@@ -770,10 +915,11 @@ function render(){
 
 function updateHUD(){
   document.getElementById('hullFill').style.width=(player.hp/stats.maxHp*100)+'%';
-  document.getElementById('shieldFill').style.width=(player.shield/stats.shieldCap*100)+'%';
+  const sCur=player.shield+player.shieldOuter;
+  document.getElementById('shieldFill').style.width=(sCur/stats.shieldCap*100)+'%';
   document.getElementById('xpFill').style.width=(player.xp/xpNeed()*100)+'%';
   document.getElementById('hullText').textContent=Math.ceil(player.hp)+'/'+Math.ceil(stats.maxHp);
-  document.getElementById('shieldText').textContent=Math.ceil(player.shield)+'/'+Math.ceil(stats.shieldCap);
+  document.getElementById('shieldText').textContent=Math.ceil(sCur)+'/'+Math.ceil(stats.shieldCap);
   document.getElementById('xpText').textContent=Math.floor(player.xp)+'/'+xpNeed()+' L'+player.level;
   document.getElementById('apText').textContent=player.ap;
   document.getElementById('waveText').textContent=wave;
