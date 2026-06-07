@@ -75,6 +75,7 @@
 </style>
 </head>
 <body>
+<audio id="music" src="Asteroid Voltage.mp3" loop preload="auto"></audio>
 <canvas id="game"></canvas>
 <div id="hud">
   <div class="row">HULL <div class="bar hull"><div class="fill" id="hullFill"></div></div><span id="hullText"></span></div>
@@ -163,7 +164,7 @@ addEventListener('keydown',e=>{
   keys.add(e.code);
   if(e.code==='KeyL'||e.code==='KeyP') toggleWeb();
   if(e.code==='KeyR') returnToMenu();
-  if(e.code==='KeyM') muted=!muted;
+  if(e.code==='KeyM'){ muted=!muted; applyMute(); }
   if(e.code==='KeyE') pulse();
 });
 addEventListener('keyup',e=>keys.delete(e.code));
@@ -367,6 +368,7 @@ window.startGame=function(diff){
   recomputeStats();
   resetWorld();
   gameState='playing';
+  startMusic();
   toast(diffSettings[diff].name+' — Good luck!');
 };
 
@@ -460,6 +462,14 @@ function explode(x,y,n,col='#fff'){ for(let i=0;i<n;i++) particles.push({x,y,vx:
 function drop(x,y,amount){ pickups.push({x,y,vx:rand(-35,35),vy:rand(-35,35),r:6,xp:amount,life:18}); }
 
 let AC=null;
+const music=document.getElementById('music');
+music.volume=.4;
+function startMusic(){ if(!muted){ music.play().catch(()=>{}); } }
+function applyMute(){
+  music.muted=muted;
+  if(muted) music.pause(); else music.play().catch(()=>{});
+  toast(muted?'Muted [m]':'Sound on [m]');
+}
 function beep(freq=.01,dur=.03,type='square'){
   if(muted) return; try{ AC=AC||new (window.AudioContext||window.webkitAudioContext)(); const o=AC.createOscillator(), g=AC.createGain();
     o.type=type; o.frequency.value=freq; g.gain.value=.035; o.connect(g); g.connect(AC.destination); o.start(); g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+dur); o.stop(AC.currentTime+dur);
